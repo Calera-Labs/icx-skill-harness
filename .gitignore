@@ -1,0 +1,44 @@
+﻿# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.secret
+
+# Compiled Binaries & Output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+icx-harness
+
+# Test Results & Diagnostic Dumps
+diagnostic_results.json
+diagnostic_report.md
+*.log
+coverage.out
+*.prof
+
+# OS & Editor Metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.bak
+
+# Generated catalog dumps (source of truth is pkg/skills/catalog.go)
+pkg/skills/*.md
+pkg/benchmark/skills/*.md
+!pkg/benchmark/skills/README.md
+testdata/skills/
+
+# Internal notes
+docs/internal/
+
+# Local gateway token
+.icx-gateway-token

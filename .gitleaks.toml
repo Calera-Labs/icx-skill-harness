@@ -1,0 +1,19 @@
+title = "gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Mock keys used only in tests"
+regexes = [
+  '''AIzaSy_mock''',
+  '''AIzaSy_key_456''',
+  '''clabs_test''',
+  '''clabs_key_123''',
+  '''test-gateway-token''',
+  '''REPLACE_ME_''',
+]
+paths = [
+  '''.*_test\.go$''',
+  '''\.env\.example$''',
+]
