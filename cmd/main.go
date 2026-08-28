@@ -100,8 +100,29 @@ func main() {
 	icxAPIKey := os.Getenv("ICX_API_KEY")
 	geminiKey := os.Getenv("GEMINI_API_KEY")
 	byokKey := os.Getenv("BYOK_API_KEY")
+	if envAnthropic := os.Getenv("ANTHROPIC_API_KEY"); envAnthropic != "" && byokKey == "" {
+		byokKey = envAnthropic
+		if *byokProvider == "gemini" && os.Getenv("BYOK_PROVIDER") == "" {
+			*byokProvider = "anthropic"
+		}
+	}
 	if envOpenAI := os.Getenv("OPENAI_API_KEY"); envOpenAI != "" && byokKey == "" {
 		byokKey = envOpenAI
+		if *byokProvider == "gemini" && os.Getenv("BYOK_PROVIDER") == "" {
+			*byokProvider = "openai"
+		}
+	}
+	if envDeepSeek := os.Getenv("DEEPSEEK_API_KEY"); envDeepSeek != "" && byokKey == "" {
+		byokKey = envDeepSeek
+		if *byokProvider == "gemini" && os.Getenv("BYOK_PROVIDER") == "" {
+			*byokProvider = "deepseek"
+		}
+	}
+	if envGroq := os.Getenv("GROQ_API_KEY"); envGroq != "" && byokKey == "" {
+		byokKey = envGroq
+		if *byokProvider == "gemini" && os.Getenv("BYOK_PROVIDER") == "" {
+			*byokProvider = "groq"
+		}
 	}
 
 	// Environment variable overrides
@@ -152,7 +173,7 @@ func main() {
 	}
 
 	// For benchmark / test suites, ensure the complete evaluation catalog is registered in-memory
-	if *cmd == "benchmark" || *cmd == "e2e" || *cmd == "benchmark-e2e" || *cmd == "diagnostic" || *cmd == "diag" || *cmd == "stress" || *cmd == "benchmark-diagnostic" {
+	if *cmd == "eval" || *cmd == "evaluate-all" || *cmd == "benchmark" || *cmd == "e2e" || *cmd == "benchmark-e2e" || *cmd == "diagnostic" || *cmd == "diag" || *cmd == "stress" || *cmd == "benchmark-diagnostic" {
 		_ = skills.PopulateCatalog(registry, "")
 	}
 
@@ -202,6 +223,44 @@ func main() {
 	ctx := context.Background()
 
 	switch *cmd {
+	case "eval", "evaluate-all":
+		fmt.Printf("\n========================================================================================\n")
+		fmt.Printf("          CALERA ICX COMPREHENSIVE SUITE EVALUATION (ALL BENCHMARKS)                    \n")
+		fmt.Printf("========================================================================================\n\n")
+
+		// 1. Diagnostic Suite
+		diagSuite := benchmark.NewDiagnosticSuite(agentRunner, registry)
+		diagRes, diagErr := diagSuite.Run(ctx, "")
+		if diagErr != nil {
+			fmt.Printf("Diagnostic run error: %v\n", diagErr)
+		} else {
+			printDiagnosticScorecard(diagRes, registry, llmClient.ModelName())
+		}
+
+		// 2. Single-Turn Benchmark Suite
+		benchSuite := benchmark.NewSuite(agentRunner, registry)
+		benchRes, benchErr := benchSuite.Run()
+		if benchErr != nil {
+			fmt.Printf("Benchmark run error: %v\n", benchErr)
+		} else {
+			printScorecard(benchRes, registry, llmClient.ModelName())
+		}
+
+		// 3. Multi-Turn E2E Pipeline Suite
+		e2eSuite := benchmark.NewE2ESuite(agentRunner, registry)
+		e2eRes, e2eErr := e2eSuite.Run()
+		if e2eErr != nil {
+			fmt.Printf("E2E benchmark run error: %v\n", e2eErr)
+		} else {
+			printE2EScorecard(e2eRes, registry, llmClient.ModelName())
+		}
+
+		if *outputJSON != "" && diagRes != nil {
+			data, _ := diagRes.ExportJSON()
+			_ = os.WriteFile(*outputJSON, data, 0644)
+			fmt.Printf("Evaluation master results saved to: %s\n", *outputJSON)
+		}
+
 	case "benchmark":
 		suite := benchmark.NewSuite(agentRunner, registry)
 		res, err := suite.Run()
@@ -461,7 +520,7 @@ func runREPL(agentRunner *agent.Runner, registry *skills.SkillRegistry) {
 	fmt.Printf("========================================================================================\n")
 	fmt.Printf("Loaded %d skills (%d tools) in Lattice. Total schema capacity: ~%d tokens.\n",
 		registry.Count(), len(registry.GetAllTools()), registry.TotalMonolithicTokens())
-	fmt.Printf("Type your task prompt, or 'exit'/'quit' to exit.\n\n")
+	fmt.Printf("Commands: /help, /skills, /tools, /route <query>, /stats, /clear, /exit\n\n")
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
@@ -473,6 +532,73 @@ func runREPL(agentRunner *agent.Runner, registry *skills.SkillRegistry) {
 		if line == "" {
 			continue
 		}
+
+		if strings.HasPrefix(line, "/") {
+			parts := strings.Fields(line)
+			cmdName := strings.ToLower(parts[0])
+			switch cmdName {
+			case "/help":
+				fmt.Printf("\nICX REPL Slash Commands:\n")
+				fmt.Printf("  /skills          List loaded skills and token footprints\n")
+				fmt.Printf("  /tools           List callable tools across all skills\n")
+				fmt.Printf("  /route <query>   Inspect JIT micro-viewport routing without executing\n")
+				fmt.Printf("  /stats           Display lattice Merkle state hash and registry stats\n")
+				fmt.Printf("  /clear           Clear console terminal\n")
+				fmt.Printf("  /exit, /quit     Exit interactive REPL\n\n")
+				continue
+			case "/skills":
+				fmt.Printf("\n--- Active Skill Lattice (%d Skills) ---\n", registry.Count())
+				for i, s := range registry.GetAllSkills() {
+					fmt.Printf(" [%2d] %-30s | %-16s | Tools: %d | ~%d tokens\n",
+						i+1, s.Name, s.Category, len(s.Tools), s.EstimatedTokenSize())
+				}
+				fmt.Println()
+				continue
+			case "/tools":
+				fmt.Printf("\n--- Active Tool Schema Library (%d Tools) ---\n", len(registry.GetAllTools()))
+				for i, t := range registry.GetAllTools() {
+					fmt.Printf(" [%2d] %-30s | %s\n", i+1, t.Name, t.Description)
+				}
+				fmt.Println()
+				continue
+			case "/route":
+				query := strings.TrimSpace(strings.TrimPrefix(line, parts[0]))
+				if query == "" {
+					fmt.Println("Usage: /route <query prompt>")
+					continue
+				}
+				res, err := agentRunner.ExecuteWithICX(query, "")
+				if err != nil {
+					fmt.Printf("Routing error: %v\n", err)
+				} else if res.Viewport != nil {
+					if res.Viewport.IsRefusal {
+						fmt.Printf("🛡️ Refusal: %s\n\n", res.Viewport.RefusalReason)
+					} else {
+						fmt.Printf("🎯 Injected Viewport: %d tools (%d schema tokens | Saved %.1f%%)\n",
+							len(res.Viewport.ActiveTools), res.Viewport.TotalSchemaTokens,
+							(1.0-float64(res.Viewport.TotalSchemaTokens)/float64(registry.TotalMonolithicTokens()))*100.0)
+						for _, at := range res.Viewport.ActiveTools {
+							fmt.Printf("   - %s: %s\n", at.Name, at.Description)
+						}
+						fmt.Println()
+					}
+				}
+				continue
+			case "/stats":
+				fmt.Printf("\n%s\n\n", registry.Summary())
+				continue
+			case "/clear":
+				fmt.Print("\033[H\033[2J")
+				continue
+			case "/exit", "/quit":
+				fmt.Println("Exiting ICX REPL.")
+				return
+			default:
+				fmt.Printf("Unknown slash command: %s. Type /help for options.\n", cmdName)
+				continue
+			}
+		}
+
 		if line == "exit" || line == "quit" {
 			fmt.Println("Exiting ICX REPL.")
 			break

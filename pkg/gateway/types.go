@@ -118,6 +118,45 @@ type OpenAIChoice struct {
 	FinishReason string        `json:"finish_reason"`
 }
 
+// OpenAIChatCompletionChunk defines a streaming chunk for OpenAI SSE protocol
+type OpenAIChatCompletionChunk struct {
+	ID                string              `json:"id"`
+	Object            string              `json:"object"`
+	Created           int64               `json:"created"`
+	Model             string              `json:"model"`
+	SystemFingerprint string              `json:"system_fingerprint,omitempty"`
+	Choices           []OpenAIChunkChoice `json:"choices"`
+	Usage             *OpenAIUsage        `json:"usage,omitempty"`
+}
+
+// OpenAIChunkChoice defines choices in a streaming chunk
+type OpenAIChunkChoice struct {
+	Index        int              `json:"index"`
+	Delta        OpenAIChunkDelta `json:"delta"`
+	FinishReason *string          `json:"finish_reason"`
+}
+
+// OpenAIChunkDelta defines the content delta in a streaming chunk
+type OpenAIChunkDelta struct {
+	Role      string                `json:"role,omitempty"`
+	Content   string                `json:"content,omitempty"`
+	ToolCalls []OpenAIChunkToolCall `json:"tool_calls,omitempty"`
+}
+
+// OpenAIChunkToolCall defines a tool call delta in streaming chunk
+type OpenAIChunkToolCall struct {
+	Index    int                     `json:"index"`
+	ID       string                  `json:"id,omitempty"`
+	Type     string                  `json:"type,omitempty"`
+	Function OpenAIChunkFunctionData `json:"function"`
+}
+
+// OpenAIChunkFunctionData holds streaming tool function arguments
+type OpenAIChunkFunctionData struct {
+	Name      string `json:"name,omitempty"`
+	Arguments string `json:"arguments,omitempty"`
+}
+
 // OpenAIUsage represents token counts with ICX cost savings metrics
 type OpenAIUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`

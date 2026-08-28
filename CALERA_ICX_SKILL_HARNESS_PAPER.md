@@ -6,6 +6,17 @@
 
 **What this document is not:** A description of ICX internals. Calera ICX is treated here as a hosted memory and recall service: ingest, recall, and spaces. How ICX stores bytes on the server is out of scope.
 
+**Where this sits:**
+
+```
+ICX  (A₄ Infinite Context)
+ ├─ ICX Skill Harness     this paper — CLI / SDK / localhost OpenAI gateway
+ ├─ ICX MCP               https://icx.caleralabs.com/mcp
+ │                         MCP server for MCP hosts (Cursor, Claude Desktop, Windsurf).
+ │                         Not a Calera desktop app or "desktop connector."
+ └─ Launch Showcase       Day 5 SwarmForge — AST in Vₜ; live Gemini, not Claude Desktop
+```
+
 **Methods note:** Benchmark numbers below come from a **closed-world sandbox**. The bundled catalog and tool executor are mocks. They are not live Stripe, Kubernetes, Vault, or SEC APIs. Reproduce with `./icx-harness -cmd diagnostic -offline`. See the repository README.
 
 *Calera Labs · August 2026 · Apache-2.0 harness*
@@ -385,7 +396,7 @@ export ICX_SPACE_ID="your_private_space"   # your space, not a shared demo
 ./icx-harness -cmd chat -provider ollama -byok-url "http://127.0.0.1:11434/v1" -model llama3 -prompt "..."
 ```
 
-**MCP:** you can import an MCP server *config* as skill metadata (we do not copy command lines into tool descriptions the model will read) and export the registry as `tools/list` JSON. That does not make this repo a marketplace. The official **ICX MCP** connector is a separate Calera project for Cursor, Claude Desktop, and similar IDEs. This harness is the CLI / SDK / localhost-proxy path for people who already have an OpenAI client.
+**MCP:** you can import an MCP server *config* as skill metadata (we do not copy command lines into tool descriptions the model will read) and export the registry as `tools/list` JSON. That does not make this repo a marketplace. The official **ICX MCP** server (`https://icx.caleralabs.com/mcp`, [icx-mcp](https://github.com/Calera-Labs/icx-mcp)) is a separate Calera project. You attach it to an MCP **host** such as Cursor, Claude Desktop, Windsurf, or Antigravity. Claude Desktop is Anthropic's app — not a Calera desktop connector. This harness is the CLI / SDK / localhost-proxy path for people who already have an OpenAI client.
 
 ---
 

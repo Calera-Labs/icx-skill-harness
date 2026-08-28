@@ -4,6 +4,20 @@
 
 Go harness for [Calera Labs Infinite Context (ICX)](https://icx.caleralabs.com). Skill libraries live in ICX. Each turn the router injects a micro-viewport of tools into your model.
 
+## What we have
+
+```
+ICX  (A₄ Infinite Context)
+ ├─ ICX Skill Harness     this repo — CLI / SDK / localhost OpenAI-compatible gateway
+ │                         Skills stay in ICX. The model sees 1–2 tool schemas, not the buffet.
+ ├─ ICX MCP               https://icx.caleralabs.com/mcp · https://github.com/Calera-Labs/icx-mcp
+ │                         MCP **server** for MCP **hosts** (Cursor, Claude Desktop, Windsurf, Antigravity).
+ │                         Claude Desktop is Anthropic's app. This is not a Calera desktop product.
+ └─ Launch Showcase       Day 5 — SwarmForge (AST in Vₜ; live Gemini auditor, not Claude Desktop)
+```
+
+`export-mcp` dumps `tools/list` JSON. It does not start Claude Desktop or ship a desktop connector.
+
 Bring your own key. Get an ICX key at [dashboard.caleralabs.com](https://dashboard.caleralabs.com).
 
 ```
@@ -108,9 +122,9 @@ Pass `-crystallize` to ingest large tool outputs back into ICX.
 
 ## Architecture
 
-The router scores skills by name, triggers, and keywords, boosts with ICX recall, and injects at most `-max-tools` schemas (default 2). Unmatched prompts return `SAFE_REFUSAL`.
+The router scores skills by name, triggers, and keywords, boosts with ICX recall, and injects at most `-max-tools` schemas (default 2). Unmatched prompts and temporal/epistemic traps return `SAFE_REFUSAL`.
 
-Offline diagnostic on the 107-skill eval catalog: **95.2%** overall (**66.7%** on safe refusal), **98.50%** fewer prompt tokens than dump-all. Scorecard: [ARCHITECTURE.md](ARCHITECTURE.md#evals). Full write-up: [CALERA_ICX_SKILL_HARNESS_PAPER.md](CALERA_ICX_SKILL_HARNESS_PAPER.md).
+Offline diagnostic on the 115-skill eval catalog: **100.0%** overall (**100.0%** on safe refusal & always-call resistance), **97.97%** fewer prompt tokens than dump-all, and **0.1 ms** zero-allocation JIT micro-viewport routing. Scorecard: [ARCHITECTURE.md](ARCHITECTURE.md#evals). Full write-up: [CALERA_ICX_SKILL_HARNESS_PAPER.md](CALERA_ICX_SKILL_HARNESS_PAPER.md).
 
 ## Resources
 

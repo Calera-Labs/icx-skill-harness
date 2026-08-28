@@ -86,6 +86,47 @@ func TestOpenAIClientLocalReasoner(t *testing.T) {
 	}
 }
 
+func TestAnthropicClientLocalReasoner(t *testing.T) {
+	client := NewAnthropicClient("sk-ant-mock", "claude-3-5-sonnet-20241022", "http://127.0.0.1:59999/unreachable")
+
+	tools := []skills.ToolDefinition{
+		{
+			Name:        "sec_edgar_query",
+			Description: "Query SEC EDGAR database for verified financial metrics",
+			Parameters: skills.ToolParameters{
+				Type: "object",
+				Properties: map[string]skills.ParameterProperty{
+					"query": {Type: "string"},
+				},
+				Required: []string{"query"},
+			},
+			Category: "Finance",
+		},
+	}
+
+	contents := []GeminiContent{
+		{
+			Role:  "user",
+			Parts: []GeminiPart{{Text: "Extract Apple FY2025 operating margin from SEC 10-K filing"}},
+		},
+	}
+
+	res, err := client.GenerateContentWithContext(context.Background(), contents, tools, "You are a helpful assistant.")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if res.ToolCall == nil {
+		t.Fatalf("expected tool call to be generated")
+	}
+	if res.ToolCall.Name != "sec_edgar_query" {
+		t.Errorf("expected 'sec_edgar_query', got '%s'", res.ToolCall.Name)
+	}
+	if client.ProviderName() != "anthropic" {
+		t.Errorf("expected provider anthropic, got %s", client.ProviderName())
+	}
+}
+
 func TestProviderFactory(t *testing.T) {
 	p1 := NewProvider("gemini", "key1", "gemini-3.5-flash-lite", "")
 	if p1.ProviderName() != "gemini" {
@@ -100,5 +141,10 @@ func TestProviderFactory(t *testing.T) {
 	p3 := NewProvider("deepseek", "key3", "deepseek-chat", "")
 	if p3.ProviderName() != "openai" { // deepseek uses OpenAI-compatible client
 		t.Errorf("expected deepseek to use openai client interface")
+	}
+
+	p4 := NewProvider("anthropic", "key4", "claude-3-5-sonnet", "")
+	if p4.ProviderName() != "anthropic" {
+		t.Errorf("expected provider anthropic, got %s", p4.ProviderName())
 	}
 }

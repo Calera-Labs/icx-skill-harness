@@ -341,7 +341,7 @@ func (r *Runner) mockToolOutput(call *byok.GeminiFunctionCall) (string, error) {
 		return `{"status": "OK", "ticker": "AAPL", "form": "10-K", "operating_margin": 0.3125, "revenue": 391035000000, "net_income": 93736000000, "accession_id": "0000320193-25-000106"}`, nil
 	case strings.Contains(name, "valuation") || strings.Contains(name, "dcf"):
 		return `{"status": "COMPLETED", "dcf_enterprise_value": 3450000000000, "implied_share_price": 228.50, "wacc": 0.085, "terminal_growth_rate": 0.025, "projection_years": 5}`, nil
-	case strings.Contains(name, "sql") || strings.Contains(name, "db") || strings.Contains(name, "postgres"):
+	case strings.Contains(name, "sql") || strings.Contains(name, "db") || strings.Contains(name, "postgres") || strings.Contains(name, "oracle"):
 		return `{"status": "COMMITTED", "rows_updated": 1, "table": "financial_records", "tx_hash": "0x7f8a9b1c", "settlement_state": "SETTLED"}`, nil
 	case strings.Contains(name, "slack"):
 		return `{"status": "SENT", "channel": "#executive-briefings", "message_ts": "1724490120.001900", "delivered": true, "blocks_rendered": 4}`, nil
@@ -357,16 +357,30 @@ func (r *Runner) mockToolOutput(call *byok.GeminiFunctionCall) (string, error) {
 		return `{"status": "OK", "query": "KRAS G12C inhibitor clinical trials", "total_results": 42, "pmids": ["34101890", "36450040", "38091230"], "top_title": "Adagrasib with or without Cetuximab in Colorectal Cancer with KRAS G12C Mutation"}`, nil
 	case strings.Contains(name, "alphafold"):
 		return `{"status": "OK", "uniprot_id": "P04637", "mean_plddt": 92.4, "confidence_tier": "VERY_HIGH", "domain_boundaries": [[1, 92], [93, 292], [293, 393]], "plddt_summary": "Core DNA-binding domain residues 93-292 show pLDDT > 95.0"}`, nil
+	case strings.Contains(name, "alphagenome"):
+		return `{"status": "SUCCESS", "variant": "chr1:1000000:A>G", "gene": "KRAS", "expression_log2fc": -1.45, "chromatin_accessibility_delta": -0.82, "predicted_effect": "DISRUPTIVE_PROMOTER"}`, nil
 	case strings.Contains(name, "chembl"):
 		return `{"status": "OK", "target_id": "CHEMBL4523956", "target_name": "GTPase KRas", "bioactivities_count": 18, "top_molecule": "CHEMBL4468641", "ic50_nm": 4.2, "mechanism": "Direct covalent binding to switch-II pocket"}`, nil
 	case strings.Contains(name, "docx") || strings.Contains(name, "doc"):
 		return `{"status": "CREATED", "file_name": "KRAS_G12C_Clinical_Target_Report.docx", "size_bytes": 48920, "sections": ["Executive Summary", "3D Structural Binding", "ChEMBL Bioactivity Table", "Clinical Trial Citations"]}`, nil
-	case strings.Contains(name, "data_assets") || strings.Contains(name, "gcp_data"):
+	case strings.Contains(name, "xlsx") || strings.Contains(name, "excel") || strings.Contains(name, "sheet"):
+		return `{"status": "GENERATED", "file_name": "Financial_Forecast_Model.xlsx", "sheets": ["Assumptions", "DCF_Model", "Sensitivity_Table"], "formulas_computed": 42, "checksum": "0x98fa12"}`, nil
+	case strings.Contains(name, "pdf"):
+		return `{"status": "EXTRACTED", "pages_scanned": 12, "tables_found": 3, "text_length": 14520, "document_title": "Master Services Agreement"}`, nil
+	case strings.Contains(name, "pptx") || strings.Contains(name, "powerpoint") || strings.Contains(name, "slide"):
+		return `{"status": "CREATED", "file_name": "Executive_Briefing_Deck.pptx", "slides_count": 8, "theme": "corporate_dark"}`, nil
+	case strings.Contains(name, "data_assets") || strings.Contains(name, "gcp_data") || strings.Contains(name, "dataplex"):
 		return `{"status": "FOUND", "dataset": "analytics_lakehouse", "tables": ["user_orders_partitioned", "clickstream_events", "inventory_snapshots"], "location": "US-CENTRAL1"}`, nil
 	case strings.Contains(name, "bigquery"):
 		return `{"status": "OPTIMIZED", "original_bytes_scanned": 85899345920, "optimized_bytes_scanned": 12884901888, "cost_reduction_pct": 85.0, "partition_clause_added": "DATE(_PARTITIONTIME) >= CURRENT_DATE() - 7"}`, nil
 	case strings.Contains(name, "dataform"):
 		return `{"status": "SUCCESS", "workflow_execution_id": "df_wf_exec_9019a", "actions_executed": 6, "assertions_passed": 6, "duration_seconds": 18}`, nil
+	case strings.Contains(name, "dbt"):
+		return `{"status": "SUCCESS", "models_compiled": 14, "models_passed": 14, "tests_passed": 28, "execution_time_seconds": 12.4}`, nil
+	case strings.Contains(name, "composer") || strings.Contains(name, "airflow") || strings.Contains(name, "dag"):
+		return `{"status": "TRIGGERED", "dag_id": "lakehouse_daily_elt", "execution_date": "2026-08-28T00:00:00Z", "state": "RUNNING", "tasks_queued": 8}`, nil
+	case strings.Contains(name, "dataproc") || strings.Contains(name, "spark"):
+		return `{"status": "COMPLETED", "batch_id": "spark-batch-99120", "rows_processed": 50000000, "duration_seconds": 45, "driver_status": "SUCCEEDED"}`, nil
 	case strings.Contains(name, "discord"):
 		return `{"status": "DISPATCHED", "channel": "#dataops-alerts", "webhook_status": 204, "embed_title": "Lakehouse ELT Pipeline Refresh Complete"}`, nil
 	case strings.Contains(name, "stripe"):
@@ -381,6 +395,40 @@ func (r *Runner) mockToolOutput(call *byok.GeminiFunctionCall) (string, error) {
 		return `{"status": "SCALED", "deployment": "order-matching", "replicas": 5, "namespace": "sandbox"}`, nil
 	case strings.Contains(name, "iam") || strings.Contains(name, "auth"):
 		return `{"status": "ROTATED", "service_account": "data-ingestion-worker", "new_token_id": "tok_9981a", "expires_in": 3600}`, nil
+	case strings.Contains(name, "weaviate") || strings.Contains(name, "vector"):
+		return `{"status": "OK", "matches_found": 5, "top_similarity": 0.942, "collection": "enterprise_documents", "distance_metric": "cosine"}`, nil
+	case strings.Contains(name, "clinical_trials") || strings.Contains(name, "trial"):
+		return `{"status": "OK", "condition": "Non-Small Cell Lung Cancer", "trials_count": 14, "top_nct": "NCT04685135", "phase": "Phase 3"}`, nil
+	case strings.Contains(name, "openfda"):
+		return `{"status": "FOUND", "recalls_count": 0, "adverse_events_count": 3, "approval_status": "APPROVED", "application_number": "NDA-21449"}`, nil
+	case strings.Contains(name, "pubchem"):
+		return `{"status": "OK", "cid": 135408738, "compound_name": "Sotorasib", "molecular_formula": "C30H30F2N6O3", "molecular_weight": 560.6}`, nil
+	case strings.Contains(name, "reactome") || strings.Contains(name, "pathway"):
+		return `{"status": "ENRICHED", "pathway_id": "R-HSA-5683057", "pathway_name": "MAPK signaling pathway", "p_value": 1.2e-9, "entities_mapped": 18}`, nil
+	case strings.Contains(name, "string_ppi") || strings.Contains(name, "ppi"):
+		return `{"status": "OK", "interactors": ["KRAS", "BRAF", "RAF1", "MAP2K1", "MAPK1"], "mean_confidence": 0.985, "network_type": "physical"}`, nil
+	case strings.Contains(name, "uniprot"):
+		return `{"status": "OK", "accession": "P01116", "gene_name": "KRAS", "organism": "Homo sapiens", "sequence_length": 188, "function": "GTPase signal transducer"}`, nil
+	case strings.Contains(name, "clinvar"):
+		return `{"status": "VERIFIED", "variation_id": "VCV000012582", "clinical_significance": "Pathogenic", "condition": "Cardiofaciocutaneous syndrome"}`, nil
+	case strings.Contains(name, "dbsnp"):
+		return `{"status": "RESOLVED", "rsid": "rs121913529", "chromosome": "12", "position": 25245350, "ref": "C", "alt": "A", "gene": "KRAS"}`, nil
+	case strings.Contains(name, "gnomad"):
+		return `{"status": "OK", "allele_frequency": 0.000012, "homozygote_count": 0, "gene_constraint_pli": 0.99, "loeuf": 0.21}`, nil
+	case strings.Contains(name, "interpro") || strings.Contains(name, "pfam"):
+		return `{"status": "FOUND", "signature_accession": "PF00071", "family_name": "Ras family", "domain_range": "5-165", "evalue": 1.4e-45}`, nil
+	case strings.Contains(name, "pdb"):
+		return `{"status": "DOWNLOADED", "pdb_id": "6OIM", "resolution_angstroms": 1.85, "experimental_method": "X-RAY DIFFRACTION", "ligand_id": "AMG510"}`, nil
+	case strings.Contains(name, "pymol"):
+		return `{"status": "RENDERED", "scene_name": "KRAS_SwitchII_BindingPocket.png", "resolution": "1920x1080", "raytracing": "HQ", "b_factor_colored": true}`, nil
+	case strings.Contains(name, "quickgo") || strings.Contains(name, "go_term"):
+		return `{"status": "MAPPED", "go_id": "GO:0007165", "go_name": "signal transduction", "aspect": "biological_process", "usage_count": 1420}`, nil
+	case strings.Contains(name, "jaspar") || strings.Contains(name, "tfbs"):
+		return `{"status": "FETCHED", "matrix_id": "MA0098.3", "tf_name": "ETS1", "family": "ETS", "motif_length": 12, "ic_score": 14.8}`, nil
+	case strings.Contains(name, "encode") || strings.Contains(name, "ccre"):
+		return `{"status": "FOUND", "ccre_accession": "EH38E1386821", "classification": "dELS", "biosample": "HepG2", "dnase_zscore": 2.45}`, nil
+	case strings.Contains(name, "epigraphy") || strings.Contains(name, "ithaca") || strings.Contains(name, "aeneas"):
+		return `{"status": "RESTORED", "restored_text": "ΕΔΟΞΕΝ ΤΕΙ ΒΟΥΛΕΙ ΚΑΙ ΤΩΙ ΔΗΜΩΙ", "predicted_date": "425 BCE", "confidence": 0.962, "region": "Attica"}`, nil
 	default:
 		return fmt.Sprintf(`{"status": "SUCCESS", "tool": "%s", "output": "Sandbox mock completed"}`, call.Name), nil
 	}

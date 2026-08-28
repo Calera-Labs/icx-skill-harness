@@ -133,7 +133,7 @@ func (c *OpenAIClient) GenerateContentWithContext(
 	promptTokenEst := len(bodyBytes) / 4
 
 	// 1. Live Cloud API Call
-	if c.APIKey != "" && !strings.HasPrefix(c.APIKey, "mock") {
+	if !isMockAPIKey(c.APIKey) {
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create openai http request: %w", err)

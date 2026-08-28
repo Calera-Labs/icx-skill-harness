@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/caleralabs/icx-skill-harness/pkg/icx"
@@ -118,3 +119,71 @@ func TestRouterEmptyQuery(t *testing.T) {
 		t.Errorf("expected refusal on empty query")
 	}
 }
+
+func TestRouterFutureSECFilingRefusal(t *testing.T) {
+	_, router := setupTestRegistryAndRouter()
+
+	viewport, err := router.RouteQueryWithContext(context.Background(), "Fetch Apple's FY2035 SEC 10-K filing operating margins and net profit")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !viewport.IsRefusal {
+		t.Errorf("expected SAFE_REFUSAL for future FY2035 SEC filing, but got %d tools", len(viewport.ActiveTools))
+	}
+}
+
+func TestContainsWordFastMatching(t *testing.T) {
+	tests := []struct {
+		text   string
+		target string
+		want   bool
+	}{
+		{"Fetch SEC filing", "sec", true},
+		{"security audit scan", "sec", false},
+		{"sec_edgar_query", "sec", true},
+		{"check 10-k now", "10-k", true},
+		{"unrelated prompt", "git", false},
+	}
+
+	for _, tt := range tests {
+		got := containsWord(strings.ToLower(tt.text), strings.ToLower(tt.target))
+		if got != tt.want {
+			t.Errorf("containsWord(%q, %q) = %v, want %v", tt.text, tt.target, got, tt.want)
+		}
+	}
+}
+
+func TestRoutePipelineTurn(t *testing.T) {
+	_, router := setupTestRegistryAndRouter()
+
+	prompt := "1. Fetch Apple's FY2025 operating margin from SEC 10-K. 2. Generate a unified git diff patch for src/pricing.py."
+
+	// Turn 1: No tools executed yet -> should route SEC tool
+	vp1, err := router.RoutePipelineTurn(context.Background(), prompt, nil)
+	if err != nil {
+		t.Fatalf("turn 1 error: %v", err)
+	}
+	if len(vp1.ActiveTools) == 0 || vp1.ActiveTools[0].Name != "sec_edgar_query" {
+		t.Errorf("turn 1 expected sec_edgar_query, got %v", vp1.ActiveTools)
+	}
+
+	// Turn 2: sec_edgar_query already executed -> should route git tool
+	vp2, err := router.RoutePipelineTurn(context.Background(), prompt, []string{"sec_edgar_query"})
+	if err != nil {
+		t.Fatalf("turn 2 error: %v", err)
+	}
+	if len(vp2.ActiveTools) == 0 || vp2.ActiveTools[0].Name != "git_diff_patcher" {
+		t.Errorf("turn 2 expected git_diff_patcher, got %v", vp2.ActiveTools)
+	}
+
+	// Turn 3: both executed -> should return empty active tools for final synthesis
+	vp3, err := router.RoutePipelineTurn(context.Background(), prompt, []string{"sec_edgar_query", "git_diff_patcher"})
+	if err != nil {
+		t.Fatalf("turn 3 error: %v", err)
+	}
+	if len(vp3.ActiveTools) != 0 {
+		t.Errorf("turn 3 expected 0 active tools for final synthesis, got %d", len(vp3.ActiveTools))
+	}
+}
+

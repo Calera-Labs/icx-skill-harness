@@ -1,4 +1,4 @@
-﻿# Environment Variables & Secrets
+# Environment Variables & Secrets
 .env
 .env.*
 !.env.example
@@ -19,6 +19,8 @@ icx-harness
 # Test Results & Diagnostic Dumps
 diagnostic_results.json
 diagnostic_report.md
+*_results.json
+diag_out.json
 *.log
 coverage.out
 *.prof

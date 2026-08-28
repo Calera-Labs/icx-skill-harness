@@ -81,6 +81,8 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/chat/completions", s.requireAuth(s.handleChatCompletions))
 	mux.HandleFunc("/v1/models", s.requireAuth(s.handleModels))
 	mux.HandleFunc("/models", s.requireAuth(s.handleModels))
+	mux.HandleFunc("/v1/skills", s.requireAuth(s.handleListSkills))
+	mux.HandleFunc("/skills", s.requireAuth(s.handleListSkills))
 	mux.HandleFunc("/v1/skills/register", s.requireAuth(s.handleSkillRegister))
 	mux.HandleFunc("/v1/stats", s.requireAuth(s.handleStats))
 	mux.HandleFunc("/v1/health", s.requireAuth(s.handleHealth))
@@ -379,6 +381,11 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.Stream {
+		s.streamChatCompletion(w, r, req, completionID, createdTimestamp, effectiveModel, modelResp, viewport, tokensSaved, savingsPct, actualPromptTokens, completionTokens, monoEstimatedTokens, merkleSeal, effectiveSpace)
+		return
+	}
+
 	openAIResp := OpenAIChatCompletionResponse{
 		ID:                completionID,
 		Object:            "chat.completion",
@@ -430,21 +437,239 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// streamChatCompletion sends response chunks over Server-Sent Events (SSE)
+func (s *Server) streamChatCompletion(
+	w http.ResponseWriter,
+	r *http.Request,
+	req OpenAIChatCompletionRequest,
+	completionID string,
+	createdTimestamp int64,
+	effectiveModel string,
+	modelResp *byok.AgentTurnResult,
+	viewport *skills.SkillViewport,
+	tokensSaved int,
+	savingsPct float64,
+	actualPromptTokens, completionTokens, monoEstimatedTokens int,
+	merkleSeal, effectiveSpace string,
+) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSONError(w, http.StatusInternalServerError, "Streaming not supported by server")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-ICX-Tokens-Saved", fmt.Sprintf("%d", tokensSaved))
+	w.Header().Set("X-ICX-Savings-Pct", fmt.Sprintf("%.2f%%", savingsPct))
+	w.Header().Set("X-ICX-Space-ID", effectiveSpace)
+	if merkleSeal != "" {
+		w.Header().Set("X-ICX-Merkle-Seal", merkleSeal)
+	}
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+
+	// 1. Initial role chunk
+	initialChunk := OpenAIChatCompletionChunk{
+		ID:                completionID,
+		Object:            "chat.completion.chunk",
+		Created:           createdTimestamp,
+		Model:             effectiveModel,
+		SystemFingerprint: "fp_calera_icx_" + generateRandomHex(4),
+		Choices: []OpenAIChunkChoice{
+			{
+				Index: 0,
+				Delta: OpenAIChunkDelta{
+					Role: "assistant",
+				},
+				FinishReason: nil,
+			},
+		},
+	}
+	chunkBytes, _ := json.Marshal(initialChunk)
+	fmt.Fprintf(w, "data: %s\n\n", string(chunkBytes))
+	flusher.Flush()
+
+	// 2. Stream tool call or text content
+	if modelResp.ToolCall != nil {
+		argsJSON, _ := json.Marshal(modelResp.ToolCall.Args)
+		toolCallChunk := OpenAIChatCompletionChunk{
+			ID:                completionID,
+			Object:            "chat.completion.chunk",
+			Created:           createdTimestamp,
+			Model:             effectiveModel,
+			SystemFingerprint: "fp_calera_icx_" + generateRandomHex(4),
+			Choices: []OpenAIChunkChoice{
+				{
+					Index: 0,
+					Delta: OpenAIChunkDelta{
+						ToolCalls: []OpenAIChunkToolCall{
+							{
+								Index: 0,
+								ID:    "call_" + generateRandomHex(8),
+								Type:  "function",
+								Function: OpenAIChunkFunctionData{
+									Name:      modelResp.ToolCall.Name,
+									Arguments: string(argsJSON),
+								},
+							},
+						},
+					},
+					FinishReason: nil,
+				},
+			},
+		}
+		cBytes, _ := json.Marshal(toolCallChunk)
+		fmt.Fprintf(w, "data: %s\n\n", string(cBytes))
+		flusher.Flush()
+
+		finishReason := "tool_calls"
+		finalChunk := OpenAIChatCompletionChunk{
+			ID:                completionID,
+			Object:            "chat.completion.chunk",
+			Created:           createdTimestamp,
+			Model:             effectiveModel,
+			SystemFingerprint: "fp_calera_icx_" + generateRandomHex(4),
+			Choices: []OpenAIChunkChoice{
+				{
+					Index:        0,
+					Delta:        OpenAIChunkDelta{},
+					FinishReason: &finishReason,
+				},
+			},
+			Usage: &OpenAIUsage{
+				PromptTokens:     actualPromptTokens,
+				CompletionTokens: completionTokens,
+				TotalTokens:      actualPromptTokens + completionTokens,
+				MonolithicTokens: monoEstimatedTokens,
+				ICXTokensSaved:   tokensSaved,
+				ICXSavingsPct:    savingsPct,
+				ICXMerkleSeal:    merkleSeal,
+				ICXSpaceID:       effectiveSpace,
+			},
+		}
+		fBytes, _ := json.Marshal(finalChunk)
+		fmt.Fprintf(w, "data: %s\n\n", string(fBytes))
+		flusher.Flush()
+	} else {
+		content := modelResp.TextResponse
+		if viewport != nil && viewport.IsRefusal {
+			content = fmt.Sprintf("[CALERA_ICX_SAFE_REFUSAL]: %s", viewport.RefusalReason)
+		}
+
+		words := strings.SplitAfter(content, " ")
+		for _, word := range words {
+			contentChunk := OpenAIChatCompletionChunk{
+				ID:                completionID,
+				Object:            "chat.completion.chunk",
+				Created:           createdTimestamp,
+				Model:             effectiveModel,
+				SystemFingerprint: "fp_calera_icx_" + generateRandomHex(4),
+				Choices: []OpenAIChunkChoice{
+					{
+						Index: 0,
+						Delta: OpenAIChunkDelta{
+							Content: word,
+						},
+						FinishReason: nil,
+					},
+				},
+			}
+			cBytes, _ := json.Marshal(contentChunk)
+			fmt.Fprintf(w, "data: %s\n\n", string(cBytes))
+			flusher.Flush()
+		}
+
+		finishReason := "stop"
+		finalChunk := OpenAIChatCompletionChunk{
+			ID:                completionID,
+			Object:            "chat.completion.chunk",
+			Created:           createdTimestamp,
+			Model:             effectiveModel,
+			SystemFingerprint: "fp_calera_icx_" + generateRandomHex(4),
+			Choices: []OpenAIChunkChoice{
+				{
+					Index:        0,
+					Delta:        OpenAIChunkDelta{},
+					FinishReason: &finishReason,
+				},
+			},
+			Usage: &OpenAIUsage{
+				PromptTokens:     actualPromptTokens,
+				CompletionTokens: completionTokens,
+				TotalTokens:      actualPromptTokens + completionTokens,
+				MonolithicTokens: monoEstimatedTokens,
+				ICXTokensSaved:   tokensSaved,
+				ICXSavingsPct:    savingsPct,
+				ICXMerkleSeal:    merkleSeal,
+				ICXSpaceID:       effectiveSpace,
+			},
+		}
+		fBytes, _ := json.Marshal(finalChunk)
+		fmt.Fprintf(w, "data: %s\n\n", string(fBytes))
+		flusher.Flush()
+	}
+
+	fmt.Fprintf(w, "data: [DONE]\n\n")
+	flusher.Flush()
+}
+
 // handleModels returns available models
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	resp := OpenAIModelListResponse{
 		Object: "list",
 		Data: []OpenAIModelItem{
-			{ID: "gemini-3.5-flash-lite", Object: "model", Created: 1700000000, OwnedBy: "google"},
-			{ID: "gemini-3.6-flash", Object: "model", Created: 1700000000, OwnedBy: "google"},
-			{ID: "gpt-4o", Object: "model", Created: 1700000000, OwnedBy: "openai"},
-			{ID: "gpt-4o-mini", Object: "model", Created: 1700000000, OwnedBy: "openai"},
-			{ID: "deepseek-chat", Object: "model", Created: 1700000000, OwnedBy: "deepseek"},
-			{ID: "claude-3-5-sonnet", Object: "model", Created: 1700000000, OwnedBy: "anthropic"},
+			{ID: "gemini-2.5-flash", Object: "model", Created: 1710000000, OwnedBy: "google"},
+			{ID: "gemini-3.5-flash-lite", Object: "model", Created: 1720000000, OwnedBy: "google"},
+			{ID: "gemini-3.6-flash", Object: "model", Created: 1720000000, OwnedBy: "google"},
+			{ID: "claude-3-5-sonnet", Object: "model", Created: 1718000000, OwnedBy: "anthropic"},
+			{ID: "claude-3-7-sonnet", Object: "model", Created: 1740000000, OwnedBy: "anthropic"},
+			{ID: "gpt-4o", Object: "model", Created: 1715000000, OwnedBy: "openai"},
+			{ID: "gpt-4o-mini", Object: "model", Created: 1721000000, OwnedBy: "openai"},
+			{ID: "o1", Object: "model", Created: 1726000000, OwnedBy: "openai"},
+			{ID: "o3-mini", Object: "model", Created: 1738000000, OwnedBy: "openai"},
+			{ID: "deepseek-chat", Object: "model", Created: 1730000000, OwnedBy: "deepseek"},
+			{ID: "deepseek-reasoner", Object: "model", Created: 1737000000, OwnedBy: "deepseek"},
+			{ID: "llama-3.3-70b-versatile", Object: "model", Created: 1733000000, OwnedBy: "groq"},
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// handleListSkills returns loaded skills in the registry
+func (s *Server) handleListSkills(w http.ResponseWriter, r *http.Request) {
+	allSkills := s.baseRegistry.GetAllSkills()
+	type skillDTO struct {
+		ID          string   `json:"id"`
+		Name        string   `json:"name"`
+		Category    string   `json:"category"`
+		Description string   `json:"description"`
+		ToolsCount  int      `json:"tools_count"`
+		Triggers    []string `json:"triggers"`
+	}
+
+	dtoList := make([]skillDTO, 0, len(allSkills))
+	for _, sk := range allSkills {
+		dtoList = append(dtoList, skillDTO{
+			ID:          sk.ID,
+			Name:        sk.Name,
+			Category:    sk.Category,
+			Description: sk.Description,
+			ToolsCount:  len(sk.Tools),
+			Triggers:    sk.Triggers,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"total_skills":      s.baseRegistry.Count(),
+		"total_tools":       len(s.baseRegistry.GetAllTools()),
+		"monolithic_tokens": s.baseRegistry.TotalMonolithicTokens(),
+		"global_merkle":     s.baseRegistry.GlobalMerkleSeal(),
+		"skills":            dtoList,
+	})
 }
 
 // handleStats returns live aggregate metrics
@@ -489,7 +714,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"status":      "HEALTHY",
-		"version":     "1.0.0",
+		"version":     "1.2.0",
 		"service":     "calera-icx-gateway",
 		"base_skills": s.baseRegistry.Count(),
 	})

@@ -6,6 +6,12 @@ import "strings"
 func NewProvider(providerName, apiKey, model, baseURL string) LLMClient {
 	p := strings.ToLower(strings.TrimSpace(providerName))
 	switch p {
+	case "anthropic", "claude":
+		if model == "" {
+			model = "claude-3-5-sonnet-20241022"
+		}
+		return NewAnthropicClient(apiKey, model, baseURL)
+
 	case "openai", "deepseek", "groq", "ollama", "vllm":
 		if baseURL == "" {
 			switch p {

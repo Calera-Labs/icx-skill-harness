@@ -112,7 +112,7 @@ func (c *GeminiClient) GenerateContentWithContext(
 	promptTokenEst := len(bodyBytes) / 4
 
 	// 1. Live Cloud API Call
-	if c.APIKey != "" && !strings.HasPrefix(c.APIKey, "AIzaSy_mock") && c.APIKey != "mock" {
+	if !isMockAPIKey(c.APIKey) {
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(bodyBytes))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create gemini http request: %w", err)

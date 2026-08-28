@@ -2,6 +2,7 @@ package byok
 
 import (
 	"context"
+	"strings"
 
 	"github.com/caleralabs/icx-skill-harness/pkg/skills"
 )
@@ -155,3 +156,10 @@ type AgentTurnResult struct {
 	InferenceEngine string                `json:"inference_engine,omitempty"`
 	Viewport        *skills.SkillViewport `json:"viewport,omitempty"`
 }
+
+// isMockAPIKey reports whether an API key represents a local test/offline sandbox fixture
+func isMockAPIKey(key string) bool {
+	k := strings.ToLower(strings.TrimSpace(key))
+	return k == "" || k == "mock" || strings.HasPrefix(k, "mock") || strings.Contains(k, "mock") || strings.Contains(k, "offline") || strings.HasPrefix(k, "sk-ant-mock") || strings.HasPrefix(k, "aizasy_mock")
+}
+

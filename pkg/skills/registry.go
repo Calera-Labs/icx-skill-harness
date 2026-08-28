@@ -14,14 +14,16 @@ import (
 
 // SkillRegistry holds all active skills in memory with fast thread-safe indexing
 type SkillRegistry struct {
-	mu           sync.RWMutex
-	skills       map[string]*Skill
-	skillsByName map[string]*Skill
-	toolsByName  map[string]ToolDefinition
-	toolToSkill  map[string]*Skill
-	byCategory   map[string][]*Skill
-	parser       *Parser
-	globalSeal   string
+	mu                sync.RWMutex
+	skills            map[string]*Skill
+	skillsByName      map[string]*Skill
+	toolsByName       map[string]ToolDefinition
+	toolToSkill       map[string]*Skill
+	byCategory        map[string][]*Skill
+	parser            *Parser
+	globalSeal        string
+	cachedMonoTokens  int
+	cachedToolsList   []ToolDefinition
 }
 
 // NewSkillRegistry creates an initialized SkillRegistry
@@ -88,7 +90,7 @@ func (r *SkillRegistry) Unregister(id string) bool {
 		r.byCategory[catLower] = filtered
 	}
 
-	r.recomputeGlobalSeal()
+	r.recomputeState()
 	return true
 }
 
@@ -170,6 +172,11 @@ func (r *SkillRegistry) GetAllSkills() []*Skill {
 func (r *SkillRegistry) GetAllTools() []ToolDefinition {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if len(r.cachedToolsList) > 0 {
+		res := make([]ToolDefinition, len(r.cachedToolsList))
+		copy(res, r.cachedToolsList)
+		return res
+	}
 	tools := make([]ToolDefinition, 0, len(r.toolsByName))
 	for _, t := range r.toolsByName {
 		tools = append(tools, t)
@@ -191,6 +198,9 @@ func (r *SkillRegistry) Count() int {
 func (r *SkillRegistry) TotalMonolithicTokens() int {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if r.cachedMonoTokens > 0 {
+		return r.cachedMonoTokens
+	}
 	total := 0
 	for _, s := range r.skills {
 		total += s.EstimatedTokenSize()
@@ -230,7 +240,7 @@ func (r *SkillRegistry) GlobalMerkleSeal() string {
 	return r.globalSeal
 }
 
-func (r *SkillRegistry) recomputeGlobalSeal() {
+func (r *SkillRegistry) recomputeState() {
 	h := sha256.New()
 	sortedIDs := make([]string, 0, len(r.skills))
 	for id := range r.skills {
@@ -238,10 +248,27 @@ func (r *SkillRegistry) recomputeGlobalSeal() {
 	}
 	sort.Strings(sortedIDs)
 
+	totalTokens := 0
 	for _, id := range sortedIDs {
-		h.Write([]byte(r.skills[id].MerkleSeal))
+		sk := r.skills[id]
+		h.Write([]byte(sk.MerkleSeal))
+		totalTokens += sk.EstimatedTokenSize()
 	}
 	r.globalSeal = hex.EncodeToString(h.Sum(nil))
+	r.cachedMonoTokens = totalTokens
+
+	tools := make([]ToolDefinition, 0, len(r.toolsByName))
+	for _, t := range r.toolsByName {
+		tools = append(tools, t)
+	}
+	sort.Slice(tools, func(i, j int) bool {
+		return tools[i].Name < tools[j].Name
+	})
+	r.cachedToolsList = tools
+}
+
+func (r *SkillRegistry) recomputeGlobalSeal() {
+	r.recomputeState()
 }
 
 // Summary returns a diagnostic string of loaded skills

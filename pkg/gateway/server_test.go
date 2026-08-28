@@ -324,3 +324,63 @@ func TestGatewayImporters(t *testing.T) {
 		t.Errorf("expected 1 MCP server loaded, got %d", mcpCount)
 	}
 }
+
+func TestGatewayChatCompletionsStreaming(t *testing.T) {
+	srv := setupTestGatewayServer()
+
+	chatReq := OpenAIChatCompletionRequest{
+		Model: "gemini-3.5-flash-lite",
+		Messages: []OpenAIMessage{
+			{
+				Role:    "user",
+				Content: "Explain quantum computing briefly",
+			},
+		},
+		Stream: true,
+	}
+
+	reqBody, _ := json.Marshal(chatReq)
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(reqBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	srv.handleChatCompletions(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from streaming completions, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "text/event-stream") {
+		t.Errorf("expected text/event-stream content type, got: %s", contentType)
+	}
+
+	bodyStr := w.Body.String()
+	if !strings.Contains(bodyStr, "data:") {
+		t.Errorf("expected SSE data: chunks in body")
+	}
+	if !strings.Contains(bodyStr, "data: [DONE]") {
+		t.Errorf("expected data: [DONE] sentinel in stream output")
+	}
+}
+
+func TestGatewayListSkills(t *testing.T) {
+	srv := setupTestGatewayServer()
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/skills", nil)
+	w := httptest.NewRecorder()
+	srv.handleListSkills(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from /v1/skills, got %d", w.Code)
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode /v1/skills response: %v", err)
+	}
+
+	if resp["total_skills"] == nil || resp["total_skills"].(float64) <= 0 {
+		t.Errorf("expected positive total_skills count")
+	}
+}
