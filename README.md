@@ -10,10 +10,8 @@ Go harness for [Calera Labs Infinite Context (ICX)](https://icx.caleralabs.com).
 ICX  (A₄ Infinite Context)
  ├─ ICX Skill Harness     this repo — CLI / SDK / localhost OpenAI-compatible gateway
  │                         Skills stay in ICX. The model sees 1–2 tool schemas, not the buffet.
- ├─ ICX MCP               https://icx.caleralabs.com/mcp · https://github.com/Calera-Labs/icx-mcp
- │                         MCP **server** for MCP **hosts** (Cursor, Claude Desktop, Windsurf, Antigravity).
- │                         Claude Desktop is Anthropic's app. This is not a Calera desktop product.
- └─ Launch Showcase       Day 5 — SwarmForge (AST in Vₜ; live Gemini auditor, not Claude Desktop)
+ └─ ICX MCP               https://icx.caleralabs.com/mcp · https://github.com/Calera-Labs/icx-mcp
+                           MCP **server** for MCP **hosts** (Cursor, Claude Desktop, Windsurf, Antigravity).
 ```
 
 `export-mcp` dumps `tools/list` JSON. It does not start Claude Desktop or ship a desktop connector.

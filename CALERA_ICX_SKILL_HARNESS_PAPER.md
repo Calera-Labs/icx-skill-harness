@@ -11,10 +11,8 @@
 ```
 ICX  (A₄ Infinite Context)
  ├─ ICX Skill Harness     this paper — CLI / SDK / localhost OpenAI gateway
- ├─ ICX MCP               https://icx.caleralabs.com/mcp
- │                         MCP server for MCP hosts (Cursor, Claude Desktop, Windsurf).
- │                         Not a Calera desktop app or "desktop connector."
- └─ Launch Showcase       Day 5 SwarmForge — AST in Vₜ; live Gemini, not Claude Desktop
+ └─ ICX MCP               https://icx.caleralabs.com/mcp
+                           MCP server for MCP hosts (Cursor, Claude Desktop, Windsurf, Antigravity).
 ```
 
 **Methods note:** Benchmark numbers below come from a **closed-world sandbox**. The bundled catalog and tool executor are mocks. They are not live Stripe, Kubernetes, Vault, or SEC APIs. Reproduce with `./icx-harness -cmd diagnostic -offline`. See the repository README.
